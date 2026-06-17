@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from mcpscanner_gui.models import (
     FindingView,
     ScanItem,
@@ -90,6 +92,35 @@ async def _run_remote(request: ScanRequest, scanner_factory) -> ScanOutcome:
     return ScanOutcome(ok=True, items=items)
 
 
+async def _run_files(request: ScanRequest, behavioral_factory, vulnpkg_factory) -> ScanOutcome:
+    findings: list = []
+
+    if "behavioral" in request.analyzers:
+        if behavioral_factory is None:
+            from mcpscanner.core.analyzers.behavioral import BehavioralCodeAnalyzer  # lazy: upstream may not be installed
+            behavioral_factory = BehavioralCodeAnalyzer
+        config = _build_config(request.keys)
+        analyzer = behavioral_factory(config)
+        findings += await analyzer.analyze(
+            request.target, context={"file_path": request.target}
+        )
+
+    if "vulnerable_package" in request.analyzers:
+        if vulnpkg_factory is None:
+            from mcpscanner.core.analyzers.vulnerable_package_analyzer import VulnerablePackageAnalyzer  # lazy
+            vulnpkg_factory = VulnerablePackageAnalyzer
+        vp = vulnpkg_factory(enabled=True, vulnerability_service="pypi", timeout=300)
+        findings += vp.analyze_path(request.target)
+
+    item = ScanItem(
+        name=os.path.basename(request.target.rstrip("/\\")) or request.target,
+        status="completed",
+        is_safe=not findings,
+        findings=_finding_views(findings),
+    )
+    return ScanOutcome(ok=True, items=[item])
+
+
 async def run_scan(
     request: ScanRequest,
     scanner_factory=None,
@@ -101,13 +132,14 @@ async def run_scan(
     All exceptions are caught and returned as ScanOutcome(ok=False, error=...)
     so the UI never crashes.
     """
-    if scanner_factory is None:
-        from mcpscanner import Scanner  # lazy: defer real import to runtime
-        scanner_factory = Scanner
-
     try:
         if request.scan_type == ScanType.REMOTE:
+            if scanner_factory is None:
+                from mcpscanner import Scanner  # lazy: defer real import to runtime
+                scanner_factory = Scanner
             return await _run_remote(request, scanner_factory)
+        if request.scan_type == ScanType.FILES:
+            return await _run_files(request, behavioral_factory, vulnpkg_factory)
         raise NotImplementedError(f"Unsupported scan type: {request.scan_type}")
     except Exception as exc:  # noqa: BLE001 - surfaced to the UI, never crashes it
         return ScanOutcome(ok=False, items=[], error=str(exc))
