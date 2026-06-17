@@ -1,5 +1,4 @@
 import asyncio
-import types
 
 from mcpscanner_gui.models import ScanRequest, ScanType
 from mcpscanner_gui import service

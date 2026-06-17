@@ -55,7 +55,7 @@ def _to_analyzer_enums(analyzer_strings: list[str]):
     try:
         from mcpscanner.core.models import AnalyzerEnum  # lazy import
         return [AnalyzerEnum(a) for a in analyzer_strings]
-    except Exception:
+    except ImportError:
         return analyzer_strings or None
 
 
@@ -66,7 +66,7 @@ def _make_auth(bearer_token: str | None):
     try:
         from mcpscanner.core.auth import Auth  # lazy import
         return Auth.bearer(bearer_token=bearer_token)
-    except Exception:
+    except ImportError:
         return None
 
 
