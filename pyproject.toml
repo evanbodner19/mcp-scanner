@@ -42,6 +42,8 @@ dependencies = [
     "tree-sitter-php>=0.21.0",
     "puremagic>=1.28",
     "pip-audit>=2.7.0",
+    "cryptography>=42.0.0",
+    "keyring>=24.0.0",
 ]
 
 [project.optional-dependencies]
@@ -113,6 +115,7 @@ Issues = "https://github.com/cisco-ai-defense/mcp-scanner/issues"
 [project.scripts]
 mcp-scanner = "mcpscanner.cli:cli_entry_point"
 mcp-scanner-api = "mcpscanner.server:main"
+mcp-scanner-gui = "mcpscanner_gui.app:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -133,7 +136,7 @@ markers = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["mcpscanner*"]
+include = ["mcpscanner*", "mcpscanner_gui*"]
 exclude = ["examples*", "evals*"]
 
 [tool.setuptools.package-data]
