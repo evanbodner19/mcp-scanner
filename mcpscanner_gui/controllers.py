@@ -19,6 +19,28 @@ PROVIDER_BY_ANALYZER: dict[str, str] = {
     "behavioral": "llm",
 }
 
+LLM_PROVIDERS: list[tuple[str, str, str]] = [
+    ("openai", "OpenAI", "gpt-4o"),
+    ("anthropic", "Anthropic", "claude-3-5-sonnet-20241022"),
+    ("google", "Google Gemini", "gemini/gemini-1.5-pro"),
+    ("custom", "Custom (LiteLLM)", ""),
+]
+
+DEFAULT_LLM_PROVIDER = "openai"
+
+
+def default_model_for(provider_id: str) -> str:
+    """Return the seed model string for a provider id, or '' if unknown."""
+    for pid, _label, model in LLM_PROVIDERS:
+        if pid == provider_id:
+            return model
+    return ""
+
+
+def llm_store_key_id(provider_id: str) -> str:
+    """Return the encrypted-store key id for a provider's LLM API key."""
+    return f"llm:{provider_id}"
+
 
 def required_providers(analyzers: list[str]) -> list[str]:
     """Return distinct providers needed for the given analyzers, in stable order."""
@@ -36,6 +58,7 @@ def build_scan_request(
     analyzers: list[str],
     keys: dict[str, str],
     bearer_token: str | None = None,
+    llm_model: str | None = None,
 ) -> ScanRequest:
     """Build a ScanRequest with validation.
 
@@ -43,21 +66,26 @@ def build_scan_request(
     - empty target
     - no analyzers
     - missing required key for any provider
+    - LLM analyzer selected with an empty model
     """
     target = (target or "").strip()
     if not target:
         raise ValueError("Please enter a scan target.")
     if not analyzers:
         raise ValueError("Select at least one analyzer.")
-    for provider in required_providers(analyzers):
+    providers = required_providers(analyzers)
+    for provider in providers:
         if not (keys.get(provider) or "").strip():
             raise ValueError(f"A key is required for provider '{provider}'.")
+    if "llm" in providers and not (llm_model or "").strip():
+        raise ValueError("Enter an LLM model name.")
     return ScanRequest(
         scan_type=scan_type,
         target=target,
         analyzers=list(analyzers),
         keys={k: v for k, v in keys.items() if v},
         bearer_token=(bearer_token or None),
+        llm_model=((llm_model or "").strip() or None),
     )
 
 

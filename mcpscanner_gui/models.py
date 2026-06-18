@@ -56,6 +56,7 @@ class ScanRequest:
     analyzers: list[str]
     keys: dict[str, str] = field(default_factory=dict)
     bearer_token: str | None = None
+    llm_model: str | None = None
 
 
 @dataclass

@@ -4,7 +4,11 @@ import pytest
 
 from mcpscanner_gui.controllers import (
     ANALYZERS_BY_TYPE,
+    DEFAULT_LLM_PROVIDER,
+    LLM_PROVIDERS,
     build_scan_request,
+    default_model_for,
+    llm_store_key_id,
     outcome_to_json,
     required_providers,
     summary_line,
@@ -45,7 +49,9 @@ def test_build_request_missing_required_key_raises():
 
 
 def test_build_request_with_required_key_ok():
-    req = build_scan_request(ScanType.REMOTE, "http://x/mcp", ["llm"], {"llm": "sk-1"})
+    req = build_scan_request(
+        ScanType.REMOTE, "http://x/mcp", ["llm"], {"llm": "sk-1"}, llm_model="gpt-4o"
+    )
     assert req.keys["llm"] == "sk-1"
 
 
@@ -68,3 +74,35 @@ def test_outcome_to_json_roundtrips():
     parsed = json.loads(outcome_to_json(out))
     assert parsed["items"][0]["name"] == "a"
     assert parsed["items"][0]["findings"][0]["severity"] == "HIGH"
+
+
+def test_llm_providers_catalog():
+    ids = [pid for pid, _label, _model in LLM_PROVIDERS]
+    assert ids == ["openai", "anthropic", "google", "custom"]
+    assert DEFAULT_LLM_PROVIDER == "openai"
+    assert default_model_for("openai") == "gpt-4o"
+    assert default_model_for("anthropic") == "claude-3-5-sonnet-20241022"
+    assert default_model_for("google") == "gemini/gemini-1.5-pro"
+    assert default_model_for("custom") == ""
+    assert default_model_for("nope") == ""
+
+
+def test_llm_store_key_id():
+    assert llm_store_key_id("anthropic") == "llm:anthropic"
+
+
+def test_build_request_requires_model_when_llm_selected():
+    with pytest.raises(ValueError, match="model"):
+        build_scan_request(ScanType.REMOTE, "http://x/mcp", ["llm"], {"llm": "k"})
+
+
+def test_build_request_sets_llm_model():
+    req = build_scan_request(
+        ScanType.REMOTE, "http://x/mcp", ["llm"], {"llm": "k"}, llm_model="gpt-4o"
+    )
+    assert req.llm_model == "gpt-4o"
+
+
+def test_build_request_no_llm_leaves_model_none():
+    req = build_scan_request(ScanType.REMOTE, "http://x/mcp", ["yara"], {})
+    assert req.llm_model is None
