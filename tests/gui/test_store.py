@@ -54,3 +54,37 @@ def test_master_key_persisted_in_keyring(tmp_path):
     kr = FakeKeyring()
     KeyStore(db_path=tmp_path / "s.db", keyring_backend=kr)
     assert kr.get_password("mcp-scanner-gui", "master-key") is not None
+
+
+def test_pref_roundtrip(store):
+    store.set_pref("llm_provider", "anthropic")
+    assert store.get_pref("llm_provider") == "anthropic"
+
+
+def test_pref_missing_returns_none(store):
+    assert store.get_pref("llm_model") is None
+
+
+def test_pref_overwrite(store):
+    store.set_pref("llm_model", "gpt-4o")
+    store.set_pref("llm_model", "gemini/gemini-1.5-pro")
+    assert store.get_pref("llm_model") == "gemini/gemini-1.5-pro"
+
+
+def test_legacy_llm_key_migrated(tmp_path):
+    db = tmp_path / "s.db"
+    kr = FakeKeyring()
+    s1 = KeyStore(db_path=db, keyring_backend=kr)
+    s1.set_key("llm", "old-key")
+    s2 = KeyStore(db_path=db, keyring_backend=kr)
+    assert s2.get_key("llm:openai") == "old-key"
+
+
+def test_legacy_migration_does_not_overwrite(tmp_path):
+    db = tmp_path / "s.db"
+    kr = FakeKeyring()
+    s1 = KeyStore(db_path=db, keyring_backend=kr)
+    s1.set_key("llm", "old-key")
+    s1.set_key("llm:openai", "already-set")
+    s2 = KeyStore(db_path=db, keyring_backend=kr)
+    assert s2.get_key("llm:openai") == "already-set"

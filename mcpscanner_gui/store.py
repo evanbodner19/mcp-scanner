@@ -23,6 +23,7 @@ class KeyStore:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._fernet = Fernet(self._load_or_create_master_key())
         self._init_db()
+        self._migrate_legacy_llm_key()
 
     def _load_or_create_master_key(self) -> bytes:
         existing = self._keyring.get_password(self.KEYRING_SERVICE, self.KEYRING_USER)
@@ -39,6 +40,10 @@ class KeyStore:
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS keys ("
                 "provider TEXT PRIMARY KEY, ciphertext BLOB NOT NULL)"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS prefs ("
+                "name TEXT PRIMARY KEY, value TEXT NOT NULL)"
             )
 
     def set_key(self, provider: str, value: str) -> None:
@@ -67,3 +72,24 @@ class KeyStore:
         with sqlite3.connect(self._db_path) as conn:
             rows = conn.execute("SELECT provider FROM keys").fetchall()
         return [r[0] for r in rows]
+
+    def get_pref(self, name: str) -> str | None:
+        with sqlite3.connect(self._db_path) as conn:
+            row = conn.execute(
+                "SELECT value FROM prefs WHERE name=?", (name,)
+            ).fetchone()
+        return row[0] if row else None
+
+    def set_pref(self, name: str, value: str) -> None:
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                "INSERT INTO prefs(name, value) VALUES(?, ?) "
+                "ON CONFLICT(name) DO UPDATE SET value=excluded.value",
+                (name, value),
+            )
+
+    def _migrate_legacy_llm_key(self) -> None:
+        """Copy a legacy single 'llm' key into the 'llm:openai' slot once."""
+        legacy = self.get_key("llm")
+        if legacy and self.get_key("llm:openai") is None:
+            self.set_key("llm:openai", legacy)
