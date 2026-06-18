@@ -1,0 +1,67 @@
+name: Build & Release GUI
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to attach the release asset to (e.g. v1.2.3)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui]"
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: pyinstaller mcp-scanner-gui.spec
+
+      - name: Zip the output directory
+        shell: pwsh
+        run: |
+          $src = "dist\MCP Scanner"
+          $dst = "dist\mcp-scanner-gui-windows.zip"
+          Compress-Archive -Path "$src\*" -DestinationPath $dst
+          Write-Host "Created $dst"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag }}
+          name: "MCP Scanner ${{ github.ref_name || inputs.tag }}"
+          body: |
+            ## MCP Scanner GUI — Windows standalone
+
+            No Python installation required.
+
+            **Install:**
+            1. Download `mcp-scanner-gui-windows.zip`
+            2. Unzip anywhere (e.g. `C:\Tools\MCP Scanner\`)
+            3. Run `MCP Scanner.exe`
+
+            **First-time setup:**
+            - Open the Settings tab and enter your API key(s)
+            - Select analyzers on the Scan tab and point at an MCP server URL or local files
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: dist/mcp-scanner-gui-windows.zip

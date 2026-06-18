@@ -32,6 +32,7 @@ MANIFEST
 *.manifest
 *.spec
 !mcp-scanner.spec
+!mcp-scanner-gui.spec
 
 # Installer logs
 pip-log.txt
