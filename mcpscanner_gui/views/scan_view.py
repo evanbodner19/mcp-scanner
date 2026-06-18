@@ -7,16 +7,23 @@ from tkinter import filedialog, messagebox, ttk
 
 from mcpscanner_gui.controllers import (
     ANALYZERS_BY_TYPE,
+    DEFAULT_LLM_PROVIDER,
+    LLM_PROVIDERS,
     build_scan_request,
+    default_model_for,
+    llm_store_key_id,
     required_providers,
 )
 from mcpscanner_gui.models import ScanType
 
 PROVIDER_LABELS = {
-    "llm": "LLM key",
     "cisco_api": "Cisco API key",
     "virustotal": "VirusTotal key",
 }
+
+_PROVIDER_DISPLAY = [label for _pid, label, _m in LLM_PROVIDERS]
+_ID_BY_LABEL = {label: pid for pid, label, _m in LLM_PROVIDERS}
+_LABEL_BY_ID = {pid: label for pid, label, _m in LLM_PROVIDERS}
 
 
 class ScanView(ttk.Frame):
@@ -30,6 +37,20 @@ class ScanView(ttk.Frame):
         self.bearer_var = tk.StringVar(value="")
         self._analyzer_vars: dict[str, tk.BooleanVar] = {}
         self._key_vars: dict[str, tk.StringVar] = {}
+
+        # LLM provider/model selection, restored from prefs if present.
+        self.llm_provider_var = tk.StringVar(value=DEFAULT_LLM_PROVIDER)
+        self.llm_model_var = tk.StringVar(
+            value=default_model_for(DEFAULT_LLM_PROVIDER)
+        )
+        saved_provider = self._store.get_pref("llm_provider")
+        if saved_provider in _LABEL_BY_ID:
+            self.llm_provider_var.set(saved_provider)
+        saved_model = self._store.get_pref("llm_model")
+        if saved_model:
+            self.llm_model_var.set(saved_model)
+        else:
+            self.llm_model_var.set(default_model_for(self.llm_provider_var.get()))
 
         type_frame = ttk.Frame(self)
         type_frame.pack(anchor="w")
@@ -85,12 +106,21 @@ class ScanView(ttk.Frame):
     def selected_analyzers(self) -> list[str]:
         return [a for a, v in self._analyzer_vars.items() if v.get()]
 
+    def set_llm_provider(self, provider_id: str) -> None:
+        self.llm_provider_var.set(provider_id)
+        self.llm_model_var.set(default_model_for(provider_id))
+        self._refresh_key_fields()
+
     def collect_keys(self) -> dict[str, str]:
         keys: dict[str, str] = {}
         for provider in required_providers(self.selected_analyzers()):
             inline = self._key_vars.get(provider)
+            if provider == "llm":
+                store_id = llm_store_key_id(self.llm_provider_var.get())
+            else:
+                store_id = provider
             value = (inline.get().strip() if inline else "") or (
-                self._store.get_key(provider) or ""
+                self._store.get_key(store_id) or ""
             )
             if value:
                 keys[provider] = value
@@ -103,6 +133,7 @@ class ScanView(ttk.Frame):
             self.selected_analyzers(),
             self.collect_keys(),
             bearer_token=self.bearer_var.get() or None,
+            llm_model=self.llm_model_var.get(),
         )
 
     # --- UI rebuild ---
@@ -130,25 +161,70 @@ class ScanView(ttk.Frame):
     def _refresh_key_fields(self) -> None:
         for child in self._key_frame.winfo_children():
             child.destroy()
-        needed = required_providers(self.selected_analyzers())
         self._key_vars = {}
-        for provider in needed:
-            saved = self._store.get_key(provider)
-            row = ttk.Frame(self._key_frame)
-            row.pack(fill="x", pady=2)
-            ttk.Label(row, text=PROVIDER_LABELS.get(provider, provider) + ":").pack(
-                side="left"
-            )
-            if saved:
-                ttk.Label(row, text="(using saved key)", foreground="gray").pack(
-                    side="left", padx=(8, 0)
-                )
+        for provider in required_providers(self.selected_analyzers()):
+            if provider == "llm":
+                self._render_llm_rows()
             else:
-                var = tk.StringVar(value="")
-                self._key_vars[provider] = var
-                ttk.Entry(row, textvariable=var, width=32, show="*").pack(
-                    side="left", padx=(8, 0)
-                )
+                self._render_simple_key_row(provider)
+
+    def _render_simple_key_row(self, provider: str) -> None:
+        saved = self._store.get_key(provider)
+        row = ttk.Frame(self._key_frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text=PROVIDER_LABELS.get(provider, provider) + ":").pack(
+            side="left"
+        )
+        if saved:
+            ttk.Label(row, text="(using saved key)", foreground="gray").pack(
+                side="left", padx=(8, 0)
+            )
+        else:
+            var = tk.StringVar(value="")
+            self._key_vars[provider] = var
+            ttk.Entry(row, textvariable=var, width=32, show="*").pack(
+                side="left", padx=(8, 0)
+            )
+
+    def _render_llm_rows(self) -> None:
+        prow = ttk.Frame(self._key_frame)
+        prow.pack(fill="x", pady=2)
+        ttk.Label(prow, text="LLM provider:").pack(side="left")
+        combo = ttk.Combobox(
+            prow, values=_PROVIDER_DISPLAY, state="readonly", width=20
+        )
+        combo.set(_LABEL_BY_ID.get(self.llm_provider_var.get(), _PROVIDER_DISPLAY[0]))
+        combo.pack(side="left", padx=(8, 0))
+        combo.bind("<<ComboboxSelected>>", self._on_provider_selected)
+        self._provider_combo = combo
+
+        mrow = ttk.Frame(self._key_frame)
+        mrow.pack(fill="x", pady=2)
+        ttk.Label(mrow, text="Model:").pack(side="left")
+        ttk.Entry(mrow, textvariable=self.llm_model_var, width=32).pack(
+            side="left", padx=(8, 0)
+        )
+
+        store_id = llm_store_key_id(self.llm_provider_var.get())
+        saved = self._store.get_key(store_id)
+        krow = ttk.Frame(self._key_frame)
+        krow.pack(fill="x", pady=2)
+        ttk.Label(krow, text="API key:").pack(side="left")
+        if saved:
+            ttk.Label(krow, text="(using saved key)", foreground="gray").pack(
+                side="left", padx=(8, 0)
+            )
+        else:
+            var = tk.StringVar(value="")
+            self._key_vars["llm"] = var
+            ttk.Entry(krow, textvariable=var, width=32, show="*").pack(
+                side="left", padx=(8, 0)
+            )
+
+    def _on_provider_selected(self, event=None) -> None:
+        label = self._provider_combo.get()
+        provider_id = _ID_BY_LABEL.get(label, DEFAULT_LLM_PROVIDER)
+        self.set_llm_provider(provider_id)
 
     def _browse(self) -> None:
         path = filedialog.askdirectory() or filedialog.askopenfilename()
@@ -161,4 +237,7 @@ class ScanView(ttk.Frame):
         except ValueError as exc:
             messagebox.showerror("Invalid scan", str(exc))
             return
+        if "llm" in required_providers(self.selected_analyzers()):
+            self._store.set_pref("llm_provider", self.llm_provider_var.get())
+            self._store.set_pref("llm_model", self.llm_model_var.get())
         self._on_scan(request)
