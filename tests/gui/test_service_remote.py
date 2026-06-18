@@ -54,3 +54,33 @@ def test_remote_scan_handles_exception():
     out = asyncio.run(service.run_scan(req, scanner_factory=BoomScanner))
     assert out.ok is False
     assert "no route to host" in out.error
+
+
+def test_build_config_sets_llm_model():
+    cfg = service._build_config(
+        {"llm": "k"}, llm_model="claude-3-5-sonnet-20241022"
+    )
+    assert cfg.llm_model == "claude-3-5-sonnet-20241022"
+
+
+def test_build_config_empty_model_defaults_to_gpt4o():
+    cfg = service._build_config({}, llm_model=None)
+    assert cfg.llm_model == "gpt-4o"
+
+
+def test_run_scan_passes_model_to_config():
+    captured = {}
+
+    class CapturingScanner:
+        def __init__(self, config):
+            captured["model"] = config.llm_model
+
+        async def scan_remote_server_tools(self, *a, **k):
+            return []
+
+    req = ScanRequest(
+        ScanType.REMOTE, "http://x/mcp", ["yara"], {},
+        llm_model="gemini/gemini-1.5-pro",
+    )
+    asyncio.run(service.run_scan(req, scanner_factory=CapturingScanner))
+    assert captured["model"] == "gemini/gemini-1.5-pro"

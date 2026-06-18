@@ -13,8 +13,8 @@ from mcpscanner_gui.models import (
 )
 
 
-def _build_config(keys: dict[str, str]):
-    """Build an upstream Config from the GUI key dict.
+def _build_config(keys: dict[str, str], llm_model: str | None = None):
+    """Build an upstream Config from the GUI key dict and chosen model.
 
     When the real mcpscanner package is unavailable (e.g. injected fake scanner
     in tests), returns a plain namespace so the factory can accept it.
@@ -24,6 +24,7 @@ def _build_config(keys: dict[str, str]):
         return Config(
             api_key=keys.get("cisco_api"),
             llm_provider_api_key=keys.get("llm"),
+            llm_model=llm_model or None,
             virustotal_api_key=keys.get("virustotal"),
         )
     except ImportError:
@@ -31,6 +32,7 @@ def _build_config(keys: dict[str, str]):
         cfg = types.SimpleNamespace(
             api_key=keys.get("cisco_api"),
             llm_provider_api_key=keys.get("llm"),
+            llm_model=llm_model or None,
             virustotal_api_key=keys.get("virustotal"),
         )
         return cfg
@@ -73,7 +75,7 @@ def _make_auth(bearer_token: str | None):
 
 
 async def _run_remote(request: ScanRequest, scanner_factory) -> ScanOutcome:
-    config = _build_config(request.keys)
+    config = _build_config(request.keys, request.llm_model)
     scanner = scanner_factory(config)
     analyzers = _to_analyzer_enums(request.analyzers) if request.analyzers else None
     auth = _make_auth(request.bearer_token)
@@ -99,7 +101,7 @@ async def _run_files(request: ScanRequest, behavioral_factory, vulnpkg_factory) 
         if behavioral_factory is None:
             from mcpscanner.core.analyzers.behavioral import BehavioralCodeAnalyzer  # lazy: upstream may not be installed
             behavioral_factory = BehavioralCodeAnalyzer
-        config = _build_config(request.keys)
+        config = _build_config(request.keys, request.llm_model)
         analyzer = behavioral_factory(config)
         findings += await analyzer.analyze(
             request.target, context={"file_path": request.target}
