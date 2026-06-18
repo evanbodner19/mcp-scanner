@@ -3,19 +3,44 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/pypi/v/cisco-ai-mcp-scanner.svg)](https://pypi.org/project/cisco-ai-mcp-scanner/)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289DA?logo=discord&logoColor=white)](https://discord.com/invite/nKWtDcXxtx)
-[![Cisco AI Defense](https://img.shields.io/badge/Cisco-AI%20Defense-049fd9?logo=cisco&logoColor=white)](https://www.cisco.com/site/us/en/products/security/ai-defense/index.html)
-[![AI Security and Safety Framework](https://img.shields.io/badge/AI%20Security-Framework-orange)](https://learn-cloudsecurity.cisco.com/ai-security-framework)
 
-A Python tool for scanning MCP (Model Context Protocol) servers and tools for potential security findings. The MCP Scanner combines Cisco AI Defense inspect API, YARA rules and LLM-as-a-judge to detect malicious MCP tools.
+A desktop GUI wrapper for the [Cisco AI Defense MCP Scanner](https://github.com/evanbodner19/mcp-scanner) — scan MCP (Model Context Protocol) servers for security threats without touching the command line.
+
+## Desktop GUI — Standalone Windows App
+
+No Python installation required. Download, unzip, and run.
+
+**[Download latest release →](https://github.com/evanbodner19/mcp-scanner/releases/latest)**
+
+1. Download `mcp-scanner-gui-windows.zip` from the latest release
+2. Unzip anywhere (e.g. `C:\Tools\MCP Scanner\`)
+3. Run `MCP Scanner.exe`
+
+### Features
+
+- **Scan tab:** point at a remote MCP server URL or local source files, pick analyzers, and scan. API keys are prompted inline if not already saved.
+- **Multi-provider LLM support:** choose OpenAI, Anthropic, Google Gemini, or any custom LiteLLM model string. Each provider keeps its own encrypted key; your last selection is remembered between launches.
+- **Results tab:** severity summary, per-tool table, finding details, and JSON export.
+- **Settings tab:** encrypted key storage — AES/Fernet at rest, master key in the OS keychain (Windows Credential Manager).
+
+### Analyzers
+
+| Analyzer | Needs key | What it does |
+|---|---|---|
+| `yara` | No | YARA rule matching for known attack patterns |
+| `api` | Cisco AI Defense | Cisco inspect API |
+| `llm` | LLM provider | LLM-as-judge semantic analysis |
+| `virustotal` | VirusTotal | Malware hash lookup for binary files |
+| `readiness` | No | Production-readiness linter (timeouts, error handling) |
+| `prompt_defense` | No | Checks for missing prompt-injection defenses |
+
+---
 
 ## Overview
 
 The MCP Scanner provides a comprehensive solution for scanning MCP servers and tools for security findings. It leverages three powerful scanning engines (Yara, LLM-as-judge, Cisco AI Defense) that can be used together or independently.
 
-The SDK is designed to be easy to use while providing powerful scanning capabilities, flexible authentication options, and customization.
-
-![MCP Scanner](https://github.com/cisco-ai-defense/mcp-scanner/raw/main/images/mcp_scanner.gif?raw=true)
+![MCP Scanner](https://github.com/evanbodner19/mcp-scanner/raw/main/images/mcp_scanner.gif?raw=true)
 
 
 ## Features
@@ -56,14 +81,14 @@ uv tool install --python 3.13 cisco-ai-mcp-scanner
 Alternatively, you can install from source:
 
 ```bash
-uv tool install --python 3.13 --from git+https://github.com/cisco-ai-defense/mcp-scanner cisco-ai-mcp-scanner
+uv tool install --python 3.13 --from git+https://github.com/evanbodner19/mcp-scanner cisco-ai-mcp-scanner
 ```
 
 
 ### Installing for local development
 
 ```bash
-git clone https://github.com/cisco-ai-defense/mcp-scanner
+git clone https://github.com/evanbodner19/mcp-scanner
 cd mcp-scanner
 uv sync --python 3.13 
 ```
@@ -477,7 +502,7 @@ mcp-scanner behavioral /path/to/mcp_server.py --output results.json --format raw
 ```
 
 
-See [Behavioral Scanning Documentation](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/behavioral-scanning.md) for complete technical details.
+See [Behavioral Scanning Documentation](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/behavioral-scanning.md) for complete technical details.
 
 #### Vulnerable Packages Scanning
 
@@ -580,7 +605,7 @@ mcp-scanner --analyzers yara,readiness --server-url http://localhost:8000/mcp
 mcp-scanner --analyzers readiness --detailed --server-url http://localhost:8000/mcp
 ```
 
-See [Readiness Scanning Documentation](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/readiness-scanning.md) for complete technical details.
+See [Readiness Scanning Documentation](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/readiness-scanning.md) for complete technical details.
 
 ### Prompt Defense Scanning
 
@@ -691,34 +716,16 @@ Once running, the API server provides endpoints for:
 - **`/scan-instructions`** - Scan server instructions from InitializeResult
 - **`/health`** - Health check endpoint
 
-Documentation is available in [docs/api-reference.md](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/api-reference.md) or as interactive documentation at `http://localhost:8000/docs` when the server is running.
+Documentation is available in [docs/api-reference.md](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/api-reference.md) or as interactive documentation at `http://localhost:8000/docs` when the server is running.
 
 ### Desktop GUI
 
-A simple native desktop GUI (Tkinter) is available for local scanning without the CLI:
+See the [standalone download](#desktop-gui--standalone-windows-app) at the top of this README. For development or running from source:
 
 ```bash
+pip install -e ".[gui]"
 mcp-scanner-gui
 ```
-
-Or using Python directly:
-
-```bash
-py -3.12 -m mcpscanner_gui
-```
-
-- **Scan tab:** choose **Remote server URL** or **Source code / files**, pick analyzers, and scan. Analyzers that need an API key (LLM, Cisco API, VirusTotal) prompt for the key inline unless it is already saved in Settings.
-
-The LLM analyzers support multiple providers. When you select an LLM-based
-analyzer, a **Provider** dropdown (OpenAI, Anthropic, Google Gemini, or
-Custom) and an editable **Model** field appear; the model defaults to a
-sensible value per provider (e.g. `gpt-4o`, `claude-3-5-sonnet-20241022`,
-`gemini/gemini-1.5-pro`) and accepts any LiteLLM-supported model string. Each
-provider keeps its own encrypted API key in the Settings tab, and your last
-provider/model choice is remembered between launches.
-
-- **Results tab:** summary, per-item severity table, finding details, and JSON export.
-- **Settings tab:** save API keys locally. Keys are encrypted (AES/Fernet) in `~/.mcp-scanner-gui/settings.db`; the master key is held in your OS keychain via `keyring`.
 
 ## Output Formats
 
@@ -783,25 +790,25 @@ http://127.0.0.1:8002/sse     safe_command  SAFE       SAFE     SAFE     SAFE   
 
 ## Documentation
 
-For detailed documentation, see the [docs/](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs) directory:
+For detailed documentation, see the [docs/](https://github.com/evanbodner19/mcp-scanner/tree/main/docs) directory:
 
-- **[Architecture](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/architecture.md)** - System architecture and components
-- **[Behavioral Scanning](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/behavioral-scanning.md)** - Advanced static analysis with LLM-powered alignment checking
-- **[VirusTotal Scanning](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/virustotal-scanning.md)** - File and directory malware scanning with VirusTotal
-- **[Vulnerable Package Scanning](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/vulnerable-package-scanning.md)** - Python dependency vulnerability scanning with pip-audit
-- **[LLM Providers](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/llm-providers.md)** - LLM configuration for all providers
-- **[MCP Threats Taxonomy](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/mcp-threats-taxonomy.md)** - Complete AITech threat taxonomy
-- **[Authentication](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/authentication.md)** - OAuth and security configuration
-- **[Programmatic Usage](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/programmatic-usage.md)** - Programmatic usage examples and advanced usage
-- **[Static Scanning](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/static-scanning.md)** - Offline/CI-CD scanning mode
-- **[API Reference](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/api-reference.md)** - Complete REST API documentation
-- **[Output Formats](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/output-formats.md)** - Detailed output format options
+- **[Architecture](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/architecture.md)** - System architecture and components
+- **[Behavioral Scanning](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/behavioral-scanning.md)** - Advanced static analysis with LLM-powered alignment checking
+- **[VirusTotal Scanning](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/virustotal-scanning.md)** - File and directory malware scanning with VirusTotal
+- **[Vulnerable Package Scanning](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/vulnerable-package-scanning.md)** - Python dependency vulnerability scanning with pip-audit
+- **[LLM Providers](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/llm-providers.md)** - LLM configuration for all providers
+- **[MCP Threats Taxonomy](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/mcp-threats-taxonomy.md)** - Complete AITech threat taxonomy
+- **[Authentication](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/authentication.md)** - OAuth and security configuration
+- **[Programmatic Usage](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/programmatic-usage.md)** - Programmatic usage examples and advanced usage
+- **[Static Scanning](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/static-scanning.md)** - Offline/CI-CD scanning mode
+- **[API Reference](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/api-reference.md)** - Complete REST API documentation
+- **[Output Formats](https://github.com/evanbodner19/mcp-scanner/tree/main/docs/output-formats.md)** - Detailed output format options
 
 
 ## Contact Cisco for obtaining an AI Defense subscription
 [https://www.cisco.com/c/en/us/products/security/ai-defense/request-demo.html](https://www.cisco.com/c/en/us/products/security/ai-defense/request-demo.html)
 
 ## License
-Distributed under the `Apache 2.0` License. See [LICENSE](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/LICENSE) for more information.
+Distributed under the `Apache 2.0` License. See [LICENSE](https://github.com/evanbodner19/mcp-scanner/tree/main/LICENSE) for more information.
 
-Project Link: [https://github.com/cisco-ai-defense/mcp-scanner](https://github.com/cisco-ai-defense/mcp-scanner)
+Project Link: [https://github.com/evanbodner19/mcp-scanner](https://github.com/evanbodner19/mcp-scanner)
