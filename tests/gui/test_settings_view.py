@@ -32,9 +32,18 @@ def root():
 def test_settings_view_saves_to_store(root, tmp_path):
     store = KeyStore(db_path=tmp_path / "s.db", keyring_backend=FakeKeyring())
     view = SettingsView(root, store)
-    view.entries["llm"].insert(0, "sk-test")
-    view.save_provider("llm")
-    assert store.get_key("llm") == "sk-test"
+    view.entries["llm:openai"].insert(0, "sk-test")
+    view.save_provider("llm:openai")
+    assert store.get_key("llm:openai") == "sk-test"
+
+
+def test_settings_view_has_per_provider_llm_rows(root, tmp_path):
+    store = KeyStore(db_path=tmp_path / "s.db", keyring_backend=FakeKeyring())
+    view = SettingsView(root, store)
+    for store_id in ("llm:openai", "llm:anthropic", "llm:google", "llm:custom"):
+        assert store_id in view.entries
+    assert "cisco_api" in view.entries
+    assert "virustotal" in view.entries
 
 
 def test_settings_view_clear_removes_key(root, tmp_path):
