@@ -9,10 +9,10 @@ import threading
 from mcpscanner_gui.models import ScanOutcome, ScanRequest
 
 
-def _default_scan_fn(request: ScanRequest) -> ScanOutcome:
+async def _default_scan_fn(request: ScanRequest) -> ScanOutcome:
     from mcpscanner_gui.service import run_scan
 
-    return run_scan(request)  # coroutine; awaited inside the worker thread
+    return await run_scan(request)
 
 
 class ScanRunner:

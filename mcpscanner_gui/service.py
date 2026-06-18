@@ -26,7 +26,7 @@ def _build_config(keys: dict[str, str]):
             llm_provider_api_key=keys.get("llm"),
             virustotal_api_key=keys.get("virustotal"),
         )
-    except Exception:
+    except ImportError:
         import types
         cfg = types.SimpleNamespace(
             api_key=keys.get("cisco_api"),
