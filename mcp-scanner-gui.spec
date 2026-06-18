@@ -18,8 +18,13 @@ block_cipher = None
 
 datas = []
 
-# mcpscanner package data
-datas += collect_data_files("mcpscanner", includes=["**/*.md", "**/*.yara", "**/*.yar", "**/*.rego"])
+# mcpscanner and mcpscanner_gui — collect everything explicitly
+mcpscanner_datas, mcpscanner_binaries, mcpscanner_hiddenimports = collect_all("mcpscanner")
+mcpscanner_gui_datas, mcpscanner_gui_binaries, mcpscanner_gui_hiddenimports = collect_all("mcpscanner_gui")
+datas += mcpscanner_datas
+datas += mcpscanner_gui_datas
+binaries = mcpscanner_binaries + mcpscanner_gui_binaries
+hiddenimports = mcpscanner_hiddenimports + mcpscanner_gui_hiddenimports
 
 # litellm ships a large model-pricing JSON and other assets
 litellm_datas, litellm_binaries, litellm_hiddenimports = collect_all("litellm")
@@ -48,13 +53,11 @@ for pkg in ts_packages:
 
 # ── binaries ─────────────────────────────────────────────────────────────────
 
-binaries = []
 binaries += litellm_binaries
 binaries += mcp_binaries
 
 # ── hidden imports ────────────────────────────────────────────────────────────
 
-hiddenimports = []
 hiddenimports += litellm_hiddenimports
 hiddenimports += mcp_hiddenimports
 
