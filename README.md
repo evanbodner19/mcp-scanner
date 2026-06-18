@@ -693,6 +693,24 @@ Once running, the API server provides endpoints for:
 
 Documentation is available in [docs/api-reference.md](https://github.com/cisco-ai-defense/mcp-scanner/tree/main/docs/api-reference.md) or as interactive documentation at `http://localhost:8000/docs` when the server is running.
 
+### Desktop GUI
+
+A simple native desktop GUI (Tkinter) is available for local scanning without the CLI:
+
+```bash
+mcp-scanner-gui
+```
+
+Or using Python directly:
+
+```bash
+py -3.12 -m mcpscanner_gui
+```
+
+- **Scan tab:** choose **Remote server URL** or **Source code / files**, pick analyzers, and scan. Analyzers that need an API key (LLM, Cisco API, VirusTotal) prompt for the key inline unless it is already saved in Settings.
+- **Results tab:** summary, per-item severity table, finding details, and JSON export.
+- **Settings tab:** save API keys locally. Keys are encrypted (AES/Fernet) in `~/.mcp-scanner-gui/settings.db`; the master key is held in your OS keychain via `keyring`.
+
 ## Output Formats
 
 The scanner supports multiple output formats:
