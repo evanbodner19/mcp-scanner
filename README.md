@@ -708,6 +708,15 @@ py -3.12 -m mcpscanner_gui
 ```
 
 - **Scan tab:** choose **Remote server URL** or **Source code / files**, pick analyzers, and scan. Analyzers that need an API key (LLM, Cisco API, VirusTotal) prompt for the key inline unless it is already saved in Settings.
+
+The LLM analyzers support multiple providers. When you select an LLM-based
+analyzer, a **Provider** dropdown (OpenAI, Anthropic, Google Gemini, or
+Custom) and an editable **Model** field appear; the model defaults to a
+sensible value per provider (e.g. `gpt-4o`, `claude-3-5-sonnet-20241022`,
+`gemini/gemini-1.5-pro`) and accepts any LiteLLM-supported model string. Each
+provider keeps its own encrypted API key in the Settings tab, and your last
+provider/model choice is remembered between launches.
+
 - **Results tab:** summary, per-item severity table, finding details, and JSON export.
 - **Settings tab:** save API keys locally. Keys are encrypted (AES/Fernet) in `~/.mcp-scanner-gui/settings.db`; the master key is held in your OS keychain via `keyring`.
 
