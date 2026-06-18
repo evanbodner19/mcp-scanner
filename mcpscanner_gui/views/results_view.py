@@ -37,6 +37,10 @@ class ResultsView(ttk.Frame):
             anchor="e", pady=(8, 0)
         )
 
+    def set_status(self, msg: str) -> None:
+        """Set the status message displayed at the top of the results view."""
+        self._summary.set(msg)
+
     def show(self, outcome: ScanOutcome) -> None:
         self._outcome = outcome
         self._summary.set(summary_line(outcome))

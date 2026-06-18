@@ -34,7 +34,7 @@ class ScannerApp(tk.Tk):
         self.notebook.add(self.settings_view, text="Settings")
 
     def _start_scan(self, request) -> None:
-        self.results_view._summary.set("Scanning…")
+        self.results_view.set_status("Scanning…")
         self.notebook.select(self.results_view)
         self._runner.start(request)
         self.after(POLL_MS, self._poll)
