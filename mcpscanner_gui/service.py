@@ -95,32 +95,80 @@ async def _run_remote(request: ScanRequest, scanner_factory) -> ScanOutcome:
 
 
 async def _run_files(request: ScanRequest, behavioral_factory, vulnpkg_factory) -> ScanOutcome:
-    findings: list = []
+    from pathlib import Path
 
+    target = request.target
+    target_path = Path(target)
+
+    if not target_path.exists():
+        return ScanOutcome(ok=False, error=f"Target not found: {target}")
+
+    file_paths = (
+        [p for p in target_path.rglob("*") if p.is_file()]
+        if target_path.is_dir()
+        else [target_path]
+    )
+
+    items: list[ScanItem] = []
+
+    # YARA: scan each file's text content individually, one result per file
+    if "yara" in request.analyzers:
+        from mcpscanner.core.analyzers.yara_analyzer import YaraAnalyzer  # lazy
+        yara_analyzer = YaraAnalyzer()
+        for fpath in file_paths:
+            try:
+                content = fpath.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                continue
+            file_findings = await yara_analyzer.analyze(
+                content, context={"tool_name": fpath.name, "content_type": "file"}
+            )
+            rel = str(fpath.relative_to(target_path) if target_path.is_dir() else fpath.name)
+            items.append(ScanItem(
+                name=rel,
+                status="completed",
+                is_safe=not file_findings,
+                findings=_finding_views(file_findings),
+            ))
+
+    # Behavioral: tree-sitter source code analysis against the whole target path
     if "behavioral" in request.analyzers:
         if behavioral_factory is None:
-            from mcpscanner.core.analyzers.behavioral import BehavioralCodeAnalyzer  # lazy: upstream may not be installed
+            from mcpscanner.core.analyzers.behavioral import BehavioralCodeAnalyzer  # lazy
             behavioral_factory = BehavioralCodeAnalyzer
         config = _build_config(request.keys, request.llm_model)
         analyzer = behavioral_factory(config)
-        findings += await analyzer.analyze(
-            request.target, context={"file_path": request.target}
-        )
+        b_findings = await analyzer.analyze(target, context={"file_path": target})
+        items.append(ScanItem(
+            name=os.path.basename(target.rstrip("/\\")) or target,
+            status="completed",
+            is_safe=not b_findings,
+            findings=_finding_views(b_findings),
+        ))
 
+    # Vulnerable packages: pip-audit against the target path
     if "vulnerable_package" in request.analyzers:
         if vulnpkg_factory is None:
             from mcpscanner.core.analyzers.vulnerable_package_analyzer import VulnerablePackageAnalyzer  # lazy
             vulnpkg_factory = VulnerablePackageAnalyzer
         vp = vulnpkg_factory(enabled=True, vulnerability_service="pypi", timeout=300)
-        findings += vp.analyze_path(request.target)
+        vp_findings = vp.analyze_path(target)
+        items.append(ScanItem(
+            name=os.path.basename(target.rstrip("/\\")) or target,
+            status="completed",
+            is_safe=not vp_findings,
+            findings=_finding_views(vp_findings),
+        ))
 
-    item = ScanItem(
-        name=os.path.basename(request.target.rstrip("/\\")) or request.target,
-        status="completed",
-        is_safe=not findings,
-        findings=_finding_views(findings),
-    )
-    return ScanOutcome(ok=True, items=[item])
+    if not items:
+        items.append(ScanItem(
+            name=os.path.basename(target.rstrip("/\\")) or target,
+            status="completed",
+            is_safe=True,
+            findings=[],
+        ))
+
+    return ScanOutcome(ok=True, items=items)
 
 
 async def run_scan(
