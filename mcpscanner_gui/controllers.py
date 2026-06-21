@@ -10,6 +10,7 @@ from mcpscanner_gui.models import ScanOutcome, ScanRequest, ScanType
 ANALYZERS_BY_TYPE: dict[ScanType, list[str]] = {
     ScanType.REMOTE: ["yara", "llm", "api", "readiness", "prompt_defense"],
     ScanType.FILES: ["behavioral", "vulnerable_package", "virustotal", "yara"],
+    ScanType.STDIO: ["yara", "llm", "api", "readiness", "prompt_defense"],
 }
 
 PROVIDER_BY_ANALYZER: dict[str, str] = {
@@ -59,6 +60,7 @@ def build_scan_request(
     keys: dict[str, str],
     bearer_token: str | None = None,
     llm_model: str | None = None,
+    stdio_timeout: int = 60,
 ) -> ScanRequest:
     """Build a ScanRequest with validation.
 
@@ -86,6 +88,7 @@ def build_scan_request(
         keys={k: v for k, v in keys.items() if v},
         bearer_token=(bearer_token or None),
         llm_model=((llm_model or "").strip() or None),
+        stdio_timeout=max(1, int(stdio_timeout)),
     )
 
 

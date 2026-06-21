@@ -25,6 +25,12 @@ _PROVIDER_DISPLAY = [label for _pid, label, _m in LLM_PROVIDERS]
 _ID_BY_LABEL = {label: pid for pid, label, _m in LLM_PROVIDERS}
 _LABEL_BY_ID = {pid: label for pid, label, _m in LLM_PROVIDERS}
 
+_TARGET_LABELS = {
+    ScanType.REMOTE: "URL:",
+    ScanType.FILES: "Path:",
+    ScanType.STDIO: "Command:",
+}
+
 
 class ScanView(ttk.Frame):
     def __init__(self, master, store, on_scan):
@@ -35,6 +41,7 @@ class ScanView(ttk.Frame):
         self.scan_type_var = tk.StringVar(value=ScanType.REMOTE.value)
         self.target_var = tk.StringVar(value="")
         self.bearer_var = tk.StringVar(value="")
+        self.stdio_timeout_var = tk.StringVar(value="60")
         self._analyzer_vars: dict[str, tk.BooleanVar] = {}
         self._key_vars: dict[str, tk.StringVar] = {}
 
@@ -59,13 +66,18 @@ class ScanView(ttk.Frame):
             variable=self.scan_type_var, command=self._rebuild,
         ).pack(side="left")
         ttk.Radiobutton(
+            type_frame, text="Stdio server", value=ScanType.STDIO.value,
+            variable=self.scan_type_var, command=self._rebuild,
+        ).pack(side="left", padx=(8, 0))
+        ttk.Radiobutton(
             type_frame, text="Source code / files", value=ScanType.FILES.value,
             variable=self.scan_type_var, command=self._rebuild,
         ).pack(side="left", padx=(8, 0))
 
         self._target_row = ttk.Frame(self)
         self._target_row.pack(fill="x", pady=(8, 0))
-        ttk.Label(self._target_row, text="Target:").pack(side="left")
+        self._target_label = ttk.Label(self._target_row, text="URL:")
+        self._target_label.pack(side="left")
         ttk.Entry(self._target_row, textvariable=self.target_var, width=44).pack(
             side="left", fill="x", expand=True, padx=(8, 0)
         )
@@ -78,6 +90,16 @@ class ScanView(ttk.Frame):
         ttk.Entry(
             self._bearer_row, textvariable=self.bearer_var, width=36, show="*"
         ).pack(side="left", padx=(8, 0))
+
+        self._timeout_row = ttk.Frame(self)
+        ttk.Label(self._timeout_row, text="Timeout (sec):").pack(side="left")
+        ttk.Entry(
+            self._timeout_row, textvariable=self.stdio_timeout_var, width=6
+        ).pack(side="left", padx=(8, 0))
+        ttk.Label(
+            self._timeout_row, text="(how long to wait for the process to start)",
+            foreground="gray",
+        ).pack(side="left", padx=(4, 0))
 
         self._analyzer_frame = ttk.LabelFrame(self, text="Analyzers", padding=8)
         self._analyzer_frame.pack(fill="x", pady=(8, 0))
@@ -127,6 +149,10 @@ class ScanView(ttk.Frame):
         return keys
 
     def build_request(self):
+        try:
+            timeout = int(self.stdio_timeout_var.get())
+        except ValueError:
+            timeout = 60
         return build_scan_request(
             self.current_scan_type(),
             self.target_var.get(),
@@ -134,22 +160,31 @@ class ScanView(ttk.Frame):
             self.collect_keys(),
             bearer_token=self.bearer_var.get() or None,
             llm_model=self.llm_model_var.get(),
+            stdio_timeout=timeout,
         )
 
     # --- UI rebuild ---
     def _rebuild(self) -> None:
-        is_remote = self.current_scan_type() == ScanType.REMOTE
-        if is_remote:
+        scan_type = self.current_scan_type()
+        self._target_label.config(text=_TARGET_LABELS.get(scan_type, "Target:"))
+
+        if scan_type == ScanType.REMOTE:
             self._browse_btn.pack_forget()
             self._bearer_row.pack(fill="x", pady=(8, 0), after=self._target_row)
-        else:
+            self._timeout_row.pack_forget()
+        elif scan_type == ScanType.STDIO:
+            self._browse_btn.pack_forget()
+            self._bearer_row.pack_forget()
+            self._timeout_row.pack(fill="x", pady=(8, 0), after=self._target_row)
+        else:  # FILES
             self._browse_btn.pack(side="left", padx=(8, 0))
             self._bearer_row.pack_forget()
+            self._timeout_row.pack_forget()
 
         for child in self._analyzer_frame.winfo_children():
             child.destroy()
         self._analyzer_vars.clear()
-        for analyzer in ANALYZERS_BY_TYPE[self.current_scan_type()]:
+        for analyzer in ANALYZERS_BY_TYPE[scan_type]:
             var = tk.BooleanVar(value=False)
             self._analyzer_vars[analyzer] = var
             ttk.Checkbutton(

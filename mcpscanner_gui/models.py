@@ -18,6 +18,7 @@ SEVERITY_ORDER: dict[str, int] = {
 class ScanType(str, Enum):
     REMOTE = "remote"
     FILES = "files"
+    STDIO = "stdio"
 
 
 @dataclass
@@ -57,6 +58,7 @@ class ScanRequest:
     keys: dict[str, str] = field(default_factory=dict)
     bearer_token: str | None = None
     llm_model: str | None = None
+    stdio_timeout: int = 60
 
 
 @dataclass

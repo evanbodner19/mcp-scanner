@@ -171,6 +171,43 @@ async def _run_files(request: ScanRequest, behavioral_factory, vulnpkg_factory) 
     return ScanOutcome(ok=True, items=items)
 
 
+async def _run_stdio(request: ScanRequest, scanner_factory) -> ScanOutcome:
+    import io
+    import shlex
+
+    parts = shlex.split(request.target)
+    if not parts:
+        return ScanOutcome(ok=False, error="No command specified.")
+
+    from mcpscanner.core.mcp_models import StdioServer  # lazy
+    server = StdioServer(command=parts[0], args=parts[1:])
+
+    config = _build_config(request.keys, request.llm_model)
+    scanner = scanner_factory(config)
+    analyzers = _to_analyzer_enums(request.analyzers) if request.analyzers else None
+
+    stderr_buf = io.StringIO()
+    results = await scanner.scan_stdio_server_tools(
+        server, analyzers=analyzers, errlog=stderr_buf,
+    )
+    stderr_out = stderr_buf.getvalue().strip()
+
+    items = [
+        ScanItem(
+            name=r.tool_name,
+            status=r.status,
+            is_safe=r.is_safe,
+            findings=_finding_views(r.findings),
+        )
+        for r in results
+    ]
+
+    if not items and stderr_out:
+        return ScanOutcome(ok=False, error=f"Process produced no tools.\n\nStderr:\n{stderr_out}")
+
+    return ScanOutcome(ok=True, items=items)
+
+
 async def run_scan(
     request: ScanRequest,
     scanner_factory=None,
@@ -188,6 +225,11 @@ async def run_scan(
                 from mcpscanner import Scanner  # lazy: defer real import to runtime
                 scanner_factory = Scanner
             return await _run_remote(request, scanner_factory)
+        if request.scan_type == ScanType.STDIO:
+            if scanner_factory is None:
+                from mcpscanner import Scanner  # lazy: defer real import to runtime
+                scanner_factory = Scanner
+            return await _run_stdio(request, scanner_factory)
         if request.scan_type == ScanType.FILES:
             return await _run_files(request, behavioral_factory, vulnpkg_factory)
         raise NotImplementedError(f"Unsupported scan type: {request.scan_type}")
