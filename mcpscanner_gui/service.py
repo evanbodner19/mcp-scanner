@@ -172,8 +172,8 @@ async def _run_files(request: ScanRequest, behavioral_factory, vulnpkg_factory) 
 
 
 async def _run_stdio(request: ScanRequest, scanner_factory) -> ScanOutcome:
-    import io
     import shlex
+    import tempfile
 
     parts = shlex.split(request.target)
     if not parts:
@@ -186,11 +186,14 @@ async def _run_stdio(request: ScanRequest, scanner_factory) -> ScanOutcome:
     scanner = scanner_factory(config)
     analyzers = _to_analyzer_enums(request.analyzers) if request.analyzers else None
 
-    stderr_buf = io.StringIO()
-    results = await scanner.scan_stdio_server_tools(
-        server, analyzers=analyzers, errlog=stderr_buf,
-    )
-    stderr_out = stderr_buf.getvalue().strip()
+    # Use a real temp file so the SDK can call .fileno() on it.
+    # io.StringIO has no file descriptor and crashes inside a GUI process.
+    with tempfile.TemporaryFile() as stderr_file:
+        results = await scanner.scan_stdio_server_tools(
+            server, analyzers=analyzers, errlog=stderr_file,
+        )
+        stderr_file.seek(0)
+        stderr_out = stderr_file.read().decode("utf-8", errors="replace").strip()
 
     items = [
         ScanItem(
