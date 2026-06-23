@@ -78,7 +78,9 @@ def create_app(
         "behavioral_factory": behavioral_factory,
         "vulnpkg_factory": vulnpkg_factory,
     }
-    app.state.noise_patterns = []  # replaced in the noise task
+    from mcpscanner_web.noise import NOISE_PATTERNS
+
+    app.state.noise_patterns = list(NOISE_PATTERNS)
     app.state.server = None  # set by the launcher for graceful shutdown
     app.state.jobs = jobs_mod.JobRegistry()
     app.state.background_tasks = set()

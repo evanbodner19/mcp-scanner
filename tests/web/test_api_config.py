@@ -47,4 +47,4 @@ def test_config_shape():
     assert {"id": "openai", "label": "OpenAI", "default_model": "gpt-4o"} in body["llm_providers"]
     assert body["default_llm_provider"] == "openai"
     assert body["stored_key_ids"] == []
-    assert body["noise_patterns"] == []  # populated in a later task
+    assert "**/*.md" in body["noise_patterns"]
