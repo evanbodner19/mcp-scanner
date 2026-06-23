@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cisco-ai-mcp-scanner"
-version = "4.7.3"
+version = "5.0.0"
 description = "A tool to scan MCP servers and tools for security findings"
 authors = [
     {name = "Cisco"},
@@ -44,6 +44,7 @@ dependencies = [
     "pip-audit>=2.7.0",
     "cryptography>=42.0.0",
     "keyring>=24.0.0",
+    "packaging>=23.0",
 ]
 
 [project.optional-dependencies]
@@ -115,7 +116,7 @@ Issues = "https://github.com/cisco-ai-defense/mcp-scanner/issues"
 [project.scripts]
 mcp-scanner = "mcpscanner.cli:cli_entry_point"
 mcp-scanner-api = "mcpscanner.server:main"
-mcp-scanner-gui = "mcpscanner_gui.app:main"
+mcp-scanner-gui = "mcpscanner_web.launcher:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -136,11 +137,12 @@ markers = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["mcpscanner*", "mcpscanner_gui*"]
+include = ["mcpscanner*", "mcpscanner_gui*", "mcpscanner_web*"]
 exclude = ["examples*", "evals*"]
 
 [tool.setuptools.package-data]
 "mcpscanner" = ["data/prompts/*.md", "data/yara_rules/*.yara", "data/yara_rules/*.yar"]
+"mcpscanner_web" = ["static/*.html", "static/*.css", "static/*.js"]
 
 # Code formatting and linting configuration
 [tool.black]

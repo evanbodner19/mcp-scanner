@@ -20,6 +20,17 @@ A Python SDK for scanning MCP servers and tools for security findings.
 Provides both a programmatic API and a REST API server.
 """
 
+# --- version (single source of truth for the updater) ---
+try:
+    from importlib.metadata import version as _pkg_version, PackageNotFoundError
+
+    try:
+        __version__ = _pkg_version("cisco-ai-mcp-scanner")
+    except PackageNotFoundError:  # source/frozen tree without dist metadata
+        __version__ = "0.0.0"
+except Exception:  # pragma: no cover - importlib.metadata always present on 3.11+
+    __version__ = "0.0.0"
+
 from .core.analyzers.api_analyzer import ApiAnalyzer
 from .core.analyzers.base import BaseAnalyzer, SecurityFinding
 from .core.analyzers.llm_analyzer import LLMAnalyzer
