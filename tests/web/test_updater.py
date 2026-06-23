@@ -196,3 +196,34 @@ def test_atomic_replace_dir_rolls_back_on_move_failure(tmp_path, monkeypatch):
         updater._atomic_replace_dir(str(src), str(dst))
     assert dst.exists()
     assert (dst / "keep.txt").read_text() == "v1"
+
+
+# ---------------------------------------------------------------------------
+# Task 18: apply_pip_update
+# ---------------------------------------------------------------------------
+
+
+def test_apply_pip_update_prefers_uv():
+    calls = []
+
+    def fake_runner(cmd, **kw):
+        calls.append(cmd)
+        class R: returncode = 0
+        return R()
+
+    cmd = updater.apply_pip_update(
+        "evanbodner19/mcp-scanner", "v5.1.0",
+        runner=fake_runner, which=lambda name: "/usr/bin/uv" if name == "uv" else None,
+    )
+    assert cmd[:3] == ["uv", "tool", "upgrade"]
+    assert "cisco-ai-mcp-scanner" in cmd
+    assert calls and calls[0] == cmd
+
+
+def test_apply_pip_update_falls_back_to_pip():
+    cmd = updater.apply_pip_update(
+        "evanbodner19/mcp-scanner", "v5.1.0",
+        runner=lambda c, **kw: type("R", (), {"returncode": 0})(),
+        which=lambda name: None,
+    )
+    assert cmd[0:4] == ["pip", "install", "--upgrade", "git+https://github.com/evanbodner19/mcp-scanner@v5.1.0"]

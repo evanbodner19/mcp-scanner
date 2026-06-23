@@ -241,3 +241,16 @@ def _windows_swap_and_relaunch(install_dir, new_root, spawn) -> bool:
         fh.write(script)
     spawn(["cmd", "/c", bat])
     return True
+
+
+DIST_NAME = "cisco-ai-mcp-scanner"
+
+
+def apply_pip_update(slug, tag, runner=subprocess.run, which=shutil.which) -> list[str]:
+    """Upgrade an installed (non-frozen) install. Returns the command run."""
+    if which("uv"):
+        cmd = ["uv", "tool", "upgrade", DIST_NAME]
+    else:
+        cmd = ["pip", "install", "--upgrade", f"git+https://github.com/{slug}@{tag}"]
+    runner(cmd)
+    return cmd
