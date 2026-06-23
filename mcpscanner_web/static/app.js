@@ -185,6 +185,11 @@ function renderResults() {
 
   const items = state.outcome.items || [];
   panel.appendChild(renderSummary(items));
+  const exportBar = el("div", { class: "controls" }, [
+    el("button", { type: "button", onclick: exportJson }, "Export JSON"),
+    el("button", { type: "button", onclick: exportMarkdown }, "Export Markdown"),
+  ]);
+  panel.appendChild(exportBar);
   panel.appendChild(renderControls(items));
 
   // partition by noise
@@ -395,8 +400,93 @@ function renderDetail(item) {
   return wrap;
 }
 
+function download(filename, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = el("a", { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportJson() {
+  // Verbatim outcome dict — identical shape to the Python JSON export.
+  download("mcp-scan.json", JSON.stringify(state.outcome, null, 2), "application/json");
+}
+
+function exportMarkdown() {
+  const items = state.outcome.items || [];
+  const shown = state.hideNoise ? items.filter((i) => !isNoise(i.name)) : items;
+  const unsafe = shown.filter((i) => !i.is_safe);
+  const lines = [];
+  lines.push("# MCP Scan Report");
+  lines.push("");
+  lines.push(`**${unsafe.length} unsafe of ${items.length} scanned**` +
+    (state.hideNoise ? ` (${items.length - shown.length} low-signal items hidden)` : ""));
+  lines.push("");
+  for (const s of SEVERITIES) {
+    const group = unsafe.filter((i) => itemSeverity(i) === s);
+    if (!group.length) continue;
+    lines.push(`## ${s} (${group.length})`);
+    for (const it of group) {
+      lines.push(`- **${it.name}**`);
+      for (const f of it.findings || []) {
+        lines.push(`  - [${(f.severity || "").toUpperCase()}] ${f.analyzer}` +
+          (f.threat_category ? ` · ${f.threat_category}` : "") + ` — ${f.summary || ""}`);
+      }
+    }
+    lines.push("");
+  }
+  download("mcp-scan.md", lines.join("\n"), "text/markdown");
+}
+
 async function openSettings() {
-  // Expanded in Task 14 / Task 23. Minimal stub for now.
+  const cfg = state.config;
+  const stored = new Set((await api("/api/keys")).stored);
+  const container = $("#settings-keys");
+  container.innerHTML = "<h3>API keys</h3>";
+
+  const rows = [
+    { id: "cisco_api", label: "Cisco API key" },
+    { id: "virustotal", label: "VirusTotal key" },
+    ...cfg.llm_providers.map((p) => ({ id: "llm:" + p.id, label: p.label + " API key" })),
+  ];
+
+  for (const row of rows) {
+    const input = el("input", { type: "password", placeholder: stored.has(row.id) ? "(saved — leave blank to keep)" : "" });
+    const saveBtn = el("button", {
+      type: "button",
+      onclick: async (e) => {
+        e.preventDefault();
+        const res = await api("/api/keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider_id: row.id, value: input.value }),
+        });
+        stored.clear();
+        res.stored.forEach((s) => stored.add(s));
+        status.textContent = input.value ? "saved" : "cleared";
+        input.value = "";
+      },
+    }, "Save");
+    const clearBtn = el("button", {
+      type: "button",
+      onclick: async (e) => {
+        e.preventDefault();
+        await api("/api/keys", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider_id: row.id, value: "" }),
+        });
+        status.textContent = "cleared";
+      },
+    }, "Clear");
+    const status = el("span", { class: "muted" }, stored.has(row.id) ? "saved" : "");
+    container.appendChild(el("div", { class: "row" }, [
+      el("label", { class: "grow" }, [row.label, input]), saveBtn, clearBtn, status,
+    ]));
+  }
+
   $("#settings-dialog").showModal();
 }
 
