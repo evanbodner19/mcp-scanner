@@ -1,3 +1,4 @@
+<!-- mcpscanner_web/static/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,8 +8,64 @@
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
-  <h1>MCP Scanner</h1>
-  <p id="status">Loading…</p>
+  <header class="topbar">
+    <h1>MCP Scanner</h1>
+    <span id="version" class="muted"></span>
+    <button id="settings-btn" type="button">Settings</button>
+  </header>
+
+  <main>
+    <section id="scan-panel" class="panel">
+      <div class="row">
+        <label>Scan type
+          <select id="scan-type"></select>
+        </label>
+        <label class="grow" id="target-label">Target
+          <input id="target" type="text" autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="row" id="bearer-row" hidden>
+        <label class="grow">Bearer token (optional)
+          <input id="bearer" type="password" autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="row" id="timeout-row" hidden>
+        <label>Timeout (sec)
+          <input id="stdio-timeout" type="number" value="60" min="1" />
+        </label>
+      </div>
+
+      <fieldset id="analyzers"><legend>Analyzers</legend></fieldset>
+
+      <div class="row" id="llm-row" hidden>
+        <label>LLM provider
+          <select id="llm-provider"></select>
+        </label>
+        <label class="grow">Model
+          <input id="llm-model" type="text" />
+        </label>
+      </div>
+
+      <div class="row">
+        <button id="scan-btn" type="button">Scan</button>
+        <span id="scan-status" class="muted"></span>
+      </div>
+    </section>
+
+    <section id="results-panel" class="panel" hidden></section>
+  </main>
+
+  <dialog id="settings-dialog">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <div id="settings-keys"></div>
+      <div id="settings-update"></div>
+      <menu><button value="close">Close</button></menu>
+    </form>
+  </dialog>
+
   <script type="module" src="/static/app.js"></script>
 </body>
 </html>
