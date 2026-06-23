@@ -174,3 +174,25 @@ def test_prepare_frozen_update_missing_asset(tmp_path):
     release = ReleaseInfo(version="5.1.0", tag="v5.1.0", notes="", assets={"checksums.txt": "https://x/c.txt"})
     with pytest.raises(UpdateError):
         updater.prepare_frozen_update(release, str(tmp_path), system="Windows", machine="AMD64")
+
+
+def test_prepare_frozen_update_missing_checksums(tmp_path):
+    name = updater.asset_name("Windows", "AMD64")
+    release = ReleaseInfo(version="5.1.0", tag="v5.1.0", notes="",
+                          assets={name: "https://x/app.zip"})
+    with pytest.raises(UpdateError):
+        updater.prepare_frozen_update(release, str(tmp_path), system="Windows", machine="AMD64")
+
+
+def test_atomic_replace_dir_rolls_back_on_move_failure(tmp_path, monkeypatch):
+    dst = tmp_path / "install"; dst.mkdir(); (dst / "keep.txt").write_text("v1")
+    src = tmp_path / "new"; src.mkdir(); (src / "new.txt").write_text("v2")
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(updater.shutil, "move", boom)
+    with pytest.raises(OSError):
+        updater._atomic_replace_dir(str(src), str(dst))
+    assert dst.exists()
+    assert (dst / "keep.txt").read_text() == "v1"

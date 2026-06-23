@@ -162,7 +162,7 @@ def prepare_frozen_update(release, dest_dir, *, system=None, machine=None, clien
 
 def apply_frozen_update(
     release, *, install_dir=None, staging_root=None, system=None, machine=None,
-    client=None, downloader=download_asset, spawn=None, replace=None,
+    client=None, downloader=download_asset, spawn=None, replace=None, relaunch=None,
 ) -> bool:
     """Download+verify, extract to staging, and swap the install atomically.
 
@@ -187,7 +187,7 @@ def apply_frozen_update(
     if (system or platform.system()).lower() == "windows":
         return _windows_swap_and_relaunch(install_dir, new_root, spawn or _spawn)
     (replace or _atomic_replace_dir)(new_root, install_dir)
-    _relaunch_posix(install_dir)
+    (relaunch or _relaunch_posix)(install_dir)
     return True
 
 
@@ -204,9 +204,17 @@ def _atomic_replace_dir(src, dst):
     backup = dst + ".old"
     if os.path.exists(backup):
         shutil.rmtree(backup, ignore_errors=True)
+    moved_to_backup = False
     if os.path.exists(dst):
         os.replace(dst, backup)
-    shutil.move(src, dst)
+        moved_to_backup = True
+    try:
+        shutil.move(src, dst)
+    except Exception:
+        # Roll back: restore the previous install so a failed update leaves it intact.
+        if moved_to_backup and not os.path.exists(dst):
+            os.replace(backup, dst)
+        raise
     shutil.rmtree(backup, ignore_errors=True)
 
 
