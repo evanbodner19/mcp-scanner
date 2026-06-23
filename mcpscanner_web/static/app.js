@@ -374,8 +374,26 @@ function itemRow(it) {
   ]);
 }
 
-// renderDetail is added in Task 13.
-function renderDetail() { return el("div"); }
+function renderDetail(item) {
+  const wrap = el("div", { class: "detail" });
+  wrap.appendChild(el("h3", {}, item.name));
+  wrap.appendChild(el("div", { class: "muted" }, item.is_safe ? "No findings" : `${item.findings.length} finding(s)`));
+
+  for (const f of item.findings || []) {
+    const sev = (f.severity || "UNKNOWN").toUpperCase();
+    const card = el("div", { class: "finding" }, [
+      el("div", {}, [
+        el("span", { class: "sev-label " + sev }, [el("span", { class: "dot " + sev }), " " + sev]),
+        el("span", { class: "muted" }, "  " + (f.analyzer || "") + (f.threat_category ? " · " + f.threat_category : "")),
+      ]),
+      el("p", {}, f.summary || ""),
+    ]);
+    if (f.file_path) card.appendChild(el("div", { class: "muted" }, "Path: " + f.file_path + (f.line ? ":" + f.line : "")));
+    if (f.snippet) card.appendChild(el("pre", {}, f.snippet));
+    wrap.appendChild(card);
+  }
+  return wrap;
+}
 
 async function openSettings() {
   // Expanded in Task 14 / Task 23. Minimal stub for now.
