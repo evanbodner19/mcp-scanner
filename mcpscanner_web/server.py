@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from mcpscanner_gui.controllers import (
     ANALYZERS_BY_TYPE,
@@ -29,6 +31,8 @@ KNOWN_PREFS = [
     "auto_update",
     "skipped_version",
 ]
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def _config_payload(app: FastAPI) -> dict:
@@ -175,5 +179,11 @@ def create_app(
         return StreamingResponse(
             jobs_mod.event_stream(job), media_type="text/event-stream"
         )
+
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+    @app.get("/")
+    async def index():
+        return FileResponse(str(_STATIC_DIR / "index.html"))
 
     return app
