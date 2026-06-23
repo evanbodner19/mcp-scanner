@@ -68,3 +68,53 @@ def detect_install_mode(frozen=None, package_dir=None) -> str:
     if (pkg.parent / ".git").exists():
         return "git"
     return "pip"
+
+
+import hashlib
+import platform
+
+_OS_MAP = {"windows": "windows", "darwin": "macos", "linux": "linux"}
+_ARCH_MAP = {"amd64": "x86_64", "x86_64": "x86_64", "arm64": "arm64", "aarch64": "arm64"}
+
+
+def asset_name(system=None, machine=None) -> str:
+    system = (system or platform.system()).lower()
+    machine = (machine or platform.machine()).lower()
+    os_part = _OS_MAP.get(system, system)
+    arch_part = _ARCH_MAP.get(machine, machine)
+    return f"MCP-Scanner-{os_part}-{arch_part}.zip"
+
+
+def parse_checksums(text: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            out[parts[-1]] = parts[0]
+    return out
+
+
+def verify_checksum(path: str, expected_sha256: str) -> bool:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest().lower() == (expected_sha256 or "").lower()
+
+
+def download_asset(url: str, dest: str, client=None, timeout: float = 60.0) -> str:
+    own = client is None
+    client = client or httpx.Client(timeout=timeout, follow_redirects=True)
+    try:
+        with client.stream("GET", url) as resp:
+            resp.raise_for_status()
+            with open(dest, "wb") as fh:
+                for chunk in resp.iter_bytes():
+                    fh.write(chunk)
+        return dest
+    finally:
+        if own:
+            client.close()

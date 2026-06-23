@@ -70,3 +70,38 @@ def test_detect_install_mode_pip(tmp_path):
     pkg = tmp_path / "site-packages" / "mcpscanner_web"
     pkg.mkdir(parents=True)
     assert updater.detect_install_mode(frozen=False, package_dir=str(pkg)) == "pip"
+
+
+import hashlib
+
+
+def test_asset_name_mapping():
+    assert updater.asset_name("Windows", "AMD64") == "MCP-Scanner-windows-x86_64.zip"
+    assert updater.asset_name("Darwin", "arm64") == "MCP-Scanner-macos-arm64.zip"
+    assert updater.asset_name("Linux", "x86_64") == "MCP-Scanner-linux-x86_64.zip"
+
+
+def test_parse_checksums():
+    text = "abc123  MCP-Scanner-windows-x86_64.zip\ndef456  MCP-Scanner-linux-x86_64.zip\n"
+    parsed = updater.parse_checksums(text)
+    assert parsed["MCP-Scanner-windows-x86_64.zip"] == "abc123"
+    assert parsed["MCP-Scanner-linux-x86_64.zip"] == "def456"
+
+
+def test_verify_checksum_match_and_mismatch(tmp_path):
+    f = tmp_path / "asset.zip"
+    f.write_bytes(b"hello world")
+    digest = hashlib.sha256(b"hello world").hexdigest()
+    assert updater.verify_checksum(str(f), digest) is True
+    assert updater.verify_checksum(str(f), digest.upper()) is True
+    assert updater.verify_checksum(str(f), "0" * 64) is False
+
+
+@respx.mock
+def test_download_asset_streams_to_disk(tmp_path):
+    respx.get("https://x/win.zip").mock(return_value=httpx.Response(200, content=b"ZIPDATA"))
+    dest = str(tmp_path / "out.zip")
+    out = updater.download_asset("https://x/win.zip", dest)
+    assert out == dest
+    with open(dest, "rb") as fh:
+        assert fh.read() == b"ZIPDATA"
