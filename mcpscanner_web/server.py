@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from mcpscanner_gui.controllers import (
     ANALYZERS_BY_TYPE,
     DEFAULT_LLM_PROVIDER,
     LLM_PROVIDERS,
+    build_scan_request,
 )
 from mcpscanner_gui.models import ScanType
+from mcpscanner_web import jobs as jobs_mod
+from mcpscanner_web.keys import assemble_keys
+from mcpscanner_web.schemas import ScanRequestIn
 
 DEFAULT_REPO_SLUG = "evanbodner19/mcp-scanner"
 
@@ -69,6 +75,7 @@ def create_app(
     }
     app.state.noise_patterns = []  # replaced in the noise task
     app.state.server = None  # set by the launcher for graceful shutdown
+    app.state.jobs = jobs_mod.JobRegistry()
 
     @app.get("/api/healthz")
     async def healthz():
@@ -118,5 +125,53 @@ def create_app(
         if app.state.server is not None:
             app.state.server.should_exit = True
         return {"ok": True}
+
+    @app.post("/api/scan")
+    async def start_scan(payload: ScanRequestIn):
+        keys = assemble_keys(app.state.store, payload.analyzers, payload.llm_provider)
+        try:
+            request = build_scan_request(
+                ScanType(payload.scan_type),
+                payload.target,
+                payload.analyzers,
+                keys,
+                bearer_token=payload.bearer_token,
+                llm_model=payload.llm_model,
+                stdio_timeout=payload.stdio_timeout,
+            )
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+        # persist provider/model choice like the old GUI did
+        if "llm" in keys or payload.llm_provider:
+            if payload.llm_provider:
+                app.state.store.set_pref("llm_provider", payload.llm_provider)
+            if payload.llm_model:
+                app.state.store.set_pref("llm_model", payload.llm_model)
+
+        job = app.state.jobs.create()
+        asyncio.create_task(jobs_mod.run_job(job, request, app.state.factories))
+        return {"job_id": job.id}
+
+    @app.get("/api/scan/{job_id}")
+    async def poll_scan(job_id: str):
+        job = app.state.jobs.get(job_id)
+        if job is None:
+            return JSONResponse({"error": "unknown job"}, status_code=404)
+        from mcpscanner_web.serialization import outcome_to_dict
+
+        return {
+            "status": job.status,
+            "result": outcome_to_dict(job.result) if job.result else None,
+        }
+
+    @app.get("/api/scan/{job_id}/events")
+    async def scan_events(job_id: str):
+        job = app.state.jobs.get(job_id)
+        if job is None:
+            return JSONResponse({"error": "unknown job"}, status_code=404)
+        return StreamingResponse(
+            jobs_mod.event_stream(job), media_type="text/event-stream"
+        )
 
     return app
