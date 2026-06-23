@@ -17,6 +17,7 @@ from mcpscanner_gui.models import ScanType
 from mcpscanner_web import jobs as jobs_mod
 from mcpscanner_web.keys import assemble_keys
 from mcpscanner_web.schemas import ScanRequestIn
+from mcpscanner_web.serialization import outcome_to_dict
 
 DEFAULT_REPO_SLUG = "evanbodner19/mcp-scanner"
 
@@ -76,6 +77,7 @@ def create_app(
     app.state.noise_patterns = []  # replaced in the noise task
     app.state.server = None  # set by the launcher for graceful shutdown
     app.state.jobs = jobs_mod.JobRegistry()
+    app.state.background_tasks = set()
 
     @app.get("/api/healthz")
     async def healthz():
@@ -150,7 +152,9 @@ def create_app(
                 app.state.store.set_pref("llm_model", payload.llm_model)
 
         job = app.state.jobs.create()
-        asyncio.create_task(jobs_mod.run_job(job, request, app.state.factories))
+        task = asyncio.create_task(jobs_mod.run_job(job, request, app.state.factories))
+        app.state.background_tasks.add(task)
+        task.add_done_callback(app.state.background_tasks.discard)
         return {"job_id": job.id}
 
     @app.get("/api/scan/{job_id}")
@@ -158,8 +162,6 @@ def create_app(
         job = app.state.jobs.get(job_id)
         if job is None:
             return JSONResponse({"error": "unknown job"}, status_code=404)
-        from mcpscanner_web.serialization import outcome_to_dict
-
         return {
             "status": job.status,
             "result": outcome_to_dict(job.result) if job.result else None,
