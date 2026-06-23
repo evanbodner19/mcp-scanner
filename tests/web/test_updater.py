@@ -105,3 +105,72 @@ def test_download_asset_streams_to_disk(tmp_path):
     assert out == dest
     with open(dest, "rb") as fh:
         assert fh.read() == b"ZIPDATA"
+
+
+# ---------------------------------------------------------------------------
+# Task 17: prepare_frozen_update
+# ---------------------------------------------------------------------------
+import io
+import zipfile
+
+import pytest
+
+from mcpscanner_web.updater import ReleaseInfo, UpdateError
+
+
+def _zip_bytes():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("MCP Scanner/run.txt", "v2")
+    return buf.getvalue()
+
+
+def test_prepare_frozen_update_verifies_checksum(tmp_path):
+    zip_data = _zip_bytes()
+    sha = hashlib.sha256(zip_data).hexdigest()
+    name = updater.asset_name("Windows", "AMD64")
+    release = ReleaseInfo(
+        version="5.1.0", tag="v5.1.0", notes="",
+        assets={name: "https://x/app.zip", "checksums.txt": "https://x/checksums.txt"},
+    )
+
+    def fake_downloader(url, dest, client=None):
+        if url == "https://x/app.zip":
+            with open(dest, "wb") as fh:
+                fh.write(zip_data)
+        else:
+            with open(dest, "w") as fh:
+                fh.write(f"{sha}  {name}\n")
+        return dest
+
+    out = updater.prepare_frozen_update(
+        release, str(tmp_path), system="Windows", machine="AMD64", downloader=fake_downloader
+    )
+    assert out.endswith(name)
+
+
+def test_prepare_frozen_update_aborts_on_mismatch(tmp_path):
+    name = updater.asset_name("Linux", "x86_64")
+    release = ReleaseInfo(
+        version="5.1.0", tag="v5.1.0", notes="",
+        assets={name: "https://x/app.zip", "checksums.txt": "https://x/checksums.txt"},
+    )
+
+    def fake_downloader(url, dest, client=None):
+        with open(dest, "wb") as fh:
+            fh.write(b"corrupt" if url.endswith("app.zip") else b"")
+        if url.endswith("checksums.txt"):
+            with open(dest, "w") as fh:
+                fh.write("0" * 64 + f"  {name}\n")
+        return dest
+
+    with pytest.raises(UpdateError):
+        updater.prepare_frozen_update(
+            release, str(tmp_path), system="Linux", machine="x86_64", downloader=fake_downloader
+        )
+
+
+def test_prepare_frozen_update_missing_asset(tmp_path):
+    release = ReleaseInfo(version="5.1.0", tag="v5.1.0", notes="", assets={"checksums.txt": "https://x/c.txt"})
+    with pytest.raises(UpdateError):
+        updater.prepare_frozen_update(release, str(tmp_path), system="Windows", machine="AMD64")
