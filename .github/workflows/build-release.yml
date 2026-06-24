@@ -7,17 +7,32 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to attach the release asset to (e.g. v1.2.3)"
+        description: "Tag to attach the release asset to (e.g. v5.0.0)"
         required: false
 
 permissions:
   contents: write
 
 jobs:
-  build-windows:
-    name: Build Windows installer
-    runs-on: windows-latest
-
+  build:
+    name: Build ${{ matrix.os_label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            os_label: windows
+            arch: x86_64
+            asset: MCP-Scanner-windows-x86_64.zip
+          - runner: macos-latest
+            os_label: macos
+            arch: arm64
+            asset: MCP-Scanner-macos-arm64.zip
+          - runner: ubuntu-latest
+            os_label: linux
+            arch: x86_64
+            asset: MCP-Scanner-linux-x86_64.zip
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,32 +51,65 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller mcp-scanner-gui.spec
 
-      - name: Zip the output directory
+      - name: Zip (Windows)
+        if: matrix.os_label == 'windows'
         shell: pwsh
-        run: |
-          $src = "dist\MCP Scanner"
-          $dst = "dist\mcp-scanner-gui-windows.zip"
-          Compress-Archive -Path "$src\*" -DestinationPath $dst
-          Write-Host "Created $dst"
+        run: Compress-Archive -Path "dist\MCP Scanner\*" -DestinationPath "dist\${{ matrix.asset }}"
 
-      - name: Upload release asset
+      - name: Zip (Unix)
+        if: matrix.os_label != 'windows'
+        run: |
+          cd "dist/MCP Scanner"
+          zip -r "../${{ matrix.asset }}" .
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -name '*.zip' -exec mv {} release/ \;
+          ls -l release
+
+      - name: Generate checksums.txt
+        run: |
+          cd release
+          sha256sum MCP-Scanner-*.zip > checksums.txt
+          cat checksums.txt
+
+      - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name || inputs.tag }}
           name: "MCP Scanner ${{ github.ref_name || inputs.tag }}"
           body: |
-            ## MCP Scanner GUI — Windows standalone
+            ## MCP Scanner ${{ github.ref_name || inputs.tag }} — standalone browser GUI
 
             No Python installation required.
 
             **Install:**
-            1. Download `mcp-scanner-gui-windows.zip`
-            2. Unzip anywhere (e.g. `C:\Tools\MCP Scanner\`)
-            3. Run `MCP Scanner.exe`
+            1. Download the zip for your OS (`MCP-Scanner-<os>-<arch>.zip`).
+            2. Unzip anywhere.
+            3. Run `MCP Scanner` — it opens in your default browser.
 
-            **First-time setup:**
-            - Open the Settings tab and enter your API key(s)
-            - Select analyzers on the Scan tab and point at an MCP server URL or local files
+            Auto-update is built in: launch checks GitHub Releases and offers to update.
+
+            `checksums.txt` contains SHA-256 sums for each asset (used by the updater).
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: dist/mcp-scanner-gui-windows.zip
+          files: |
+            release/MCP-Scanner-*.zip
+            release/checksums.txt
