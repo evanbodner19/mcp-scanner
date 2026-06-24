@@ -1,7 +1,6 @@
-import importlib
-
-
-def test_package_imports_and_has_version():
-    mod = importlib.import_module("mcpscanner_gui")
-    assert isinstance(mod.__version__, str)
-    assert mod.__version__
+# tests/gui/test_package.py
+def test_core_modules_import():
+    import mcpscanner_gui.controllers  # noqa: F401
+    import mcpscanner_gui.models  # noqa: F401
+    import mcpscanner_gui.service  # noqa: F401
+    import mcpscanner_gui.store  # noqa: F401
