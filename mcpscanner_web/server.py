@@ -210,11 +210,11 @@ def create_app(
 
     @app.post("/api/update")
     async def do_update():
-        release = app.state.release_fetcher(app.state.repo_slug)
-        if release is None:
-            return {"status": "unavailable"}
-        mode = app.state.install_mode_detector()
         try:
+            release = app.state.release_fetcher(app.state.repo_slug)
+            if release is None:
+                return {"status": "unavailable"}
+            mode = app.state.install_mode_detector()
             if mode == "git":
                 return {"status": "git", "message": "Update via git pull (development checkout)."}
             if mode == "frozen":

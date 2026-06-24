@@ -94,10 +94,12 @@ def test_gate_fails_open_when_fetch_none():
 def test_gate_auto_git_never_applies():
     store = FakeStore()
     store.set_pref("auto_update", "auto")
+    called = []
     applied = launcher.pre_launch_update_gate(
         store, "evanbodner19/mcp-scanner", "5.0.0",
         fetcher=lambda slug: updater_mod.ReleaseInfo("5.1.0", "v5.1.0", "", {}),
         mode_detector=lambda: "git",
-        frozen_applier=lambda rel: (_ for _ in ()).throw(AssertionError("should not apply")),
+        frozen_applier=lambda rel: called.append(rel),
     )
     assert applied is False
+    assert called == []
