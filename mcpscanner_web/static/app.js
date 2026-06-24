@@ -487,6 +487,29 @@ async function openSettings() {
     ]));
   }
 
+  const upd = $("#settings-update");
+  const prefs = (await api("/api/prefs")).prefs || {};
+  upd.innerHTML = "<h3>Updates</h3>";
+
+  const autoSel = el("select", {});
+  for (const v of ["prompt", "auto", "off"]) {
+    const o = el("option", { value: v }, v);
+    if ((prefs.auto_update || "prompt") === v) o.selected = true;
+    autoSel.appendChild(o);
+  }
+  autoSel.onchange = () => api("/api/prefs", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "auto_update", value: autoSel.value }),
+  });
+
+  const checkBtn = el("button", {
+    type: "button",
+    onclick: async (e) => { e.preventDefault(); const i = await api("/api/version");
+      if (i.update_available) renderUpdateBanner(i); else alert("You're up to date (" + i.current + ")."); },
+  }, "Check for updates now");
+
+  upd.appendChild(el("div", { class: "row" }, [el("label", {}, ["Auto-update", autoSel]), checkBtn]));
+
   $("#settings-dialog").showModal();
 }
 
@@ -496,6 +519,45 @@ async function boot() {
   if (prefs.llm_provider) state.defaultProvider = prefs.llm_provider;
   renderScanForm();
   if (prefs.llm_model) $("#llm-model").value = prefs.llm_model;
+  checkForUpdate();
 }
 
 boot();
+
+async function checkForUpdate() {
+  const info = await api("/api/version");
+  if (!info.update_available) return;
+  renderUpdateBanner(info);
+}
+
+function renderUpdateBanner(info) {
+  const mount = $("#update-banner");
+  mount.innerHTML = "";
+  const banner = el("div", { class: "update-banner" }, [
+    el("strong", {}, `Update available: ${info.current} → ${info.latest}`),
+    el("p", { class: "muted" }, (info.release_notes || "").slice(0, 600)),
+    el("menu", {}, [
+      el("button", { type: "button", onclick: () => doUpdate(info) }, "Update now"),
+      el("button", { type: "button", onclick: () => skipVersion(info) }, "Skip this version"),
+      el("button", { type: "button", onclick: () => (mount.innerHTML = "") }, "Remind me later"),
+    ]),
+  ]);
+  if (info.install_mode === "git") {
+    banner.appendChild(el("p", { class: "muted" }, "Development checkout — update with git pull."));
+  }
+  mount.appendChild(banner);
+}
+
+async function doUpdate(info) {
+  const res = await api("/api/update", { method: "POST" });
+  $("#update-banner").innerHTML = "";
+  alert(res.message || res.status);
+}
+
+async function skipVersion(info) {
+  await api("/api/prefs", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "skipped_version", value: info.latest }),
+  });
+  $("#update-banner").innerHTML = "";
+}
