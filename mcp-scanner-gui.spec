@@ -26,6 +26,13 @@ datas += mcpscanner_gui_datas
 binaries = mcpscanner_binaries + mcpscanner_gui_binaries
 hiddenimports = mcpscanner_hiddenimports + mcpscanner_gui_hiddenimports
 
+# mcpscanner_web — code + vendored static frontend
+mcpscanner_web_datas, mcpscanner_web_binaries, mcpscanner_web_hiddenimports = collect_all("mcpscanner_web")
+datas += mcpscanner_web_datas
+binaries += mcpscanner_web_binaries
+hiddenimports += mcpscanner_web_hiddenimports
+datas += collect_data_files("mcpscanner_web", includes=["static/*"])
+
 # litellm ships a large model-pricing JSON and other assets
 litellm_datas, litellm_binaries, litellm_hiddenimports = collect_all("litellm")
 datas += litellm_datas
@@ -79,6 +86,25 @@ hiddenimports += [
 
 # yara-python native extension
 hiddenimports += ["yara"]
+
+# web stack (FastAPI + uvicorn served in a background thread)
+hiddenimports += [
+    "fastapi",
+    "starlette",
+    "starlette.responses",
+    "starlette.staticfiles",
+    "anyio",
+    "uvicorn",
+    "uvicorn.logging",
+    "uvicorn.loops.auto",
+    "uvicorn.loops.asyncio",
+    "uvicorn.protocols.http.auto",
+    "uvicorn.protocols.http.h11_impl",
+    "uvicorn.protocols.websockets.auto",
+    "uvicorn.lifespan.on",
+    "packaging.version",
+]
+hiddenimports += collect_submodules("mcpscanner_web")
 
 # tree-sitter submodules
 for pkg in ts_packages:
