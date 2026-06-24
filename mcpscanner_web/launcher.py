@@ -10,6 +10,7 @@ import webbrowser
 import httpx
 import uvicorn
 
+from mcpscanner_web import updater as updater_mod
 from mcpscanner_web.server import create_app
 
 
@@ -54,6 +55,44 @@ def wait_healthy(port: int, timeout: float = 10.0, sleep: float = 0.1, client=No
             client.close()
 
 
+def pre_launch_update_gate(
+    store, slug, current_version, *,
+    fetcher=None, mode_detector=None, frozen_applier=None, pip_applier=None,
+) -> bool:
+    """Check for updates before opening the browser. Returns True if a blocking
+    auto-update was applied (a relaunch is scheduled; don't open the browser).
+
+    Fails open: any error returns False and launch proceeds normally.
+    """
+    fetcher = fetcher or (lambda s: updater_mod.fetch_latest_release(s))
+    mode_detector = mode_detector or updater_mod.detect_install_mode
+    frozen_applier = frozen_applier or (lambda rel: updater_mod.apply_frozen_update(rel))
+    pip_applier = pip_applier or (lambda s, tag: updater_mod.apply_pip_update(s, tag))
+
+    try:
+        auto = store.get_pref("auto_update") or "prompt"
+        if auto == "off":
+            return False
+        release = fetcher(slug)
+        if release is None:
+            return False
+        skipped = store.get_pref("skipped_version")
+        if not updater_mod.is_update_available(current_version, release.version, skipped):
+            return False
+        if auto != "auto":
+            return False  # prompt mode: the SPA banner handles it
+        mode = mode_detector()
+        if mode == "git":
+            return False
+        if mode == "frozen":
+            frozen_applier(release)
+            return True
+        pip_applier(slug, release.tag)
+        return True
+    except Exception:
+        return False
+
+
 def open_browser(port: int, opener=webbrowser.open) -> None:
     url = f"http://127.0.0.1:{port}/"
     try:
@@ -82,7 +121,16 @@ def main(open_browser_fn=None, run: bool = True) -> None:
         print("MCP Scanner server failed to start.")
         return
 
-    # Phase 3 will insert the pre-launch auto-update gate here.
+    import mcpscanner
+    from mcpscanner_gui.store import KeyStore
+
+    try:
+        applied = pre_launch_update_gate(KeyStore(), "evanbodner19/mcp-scanner", mcpscanner.__version__)
+    except Exception:
+        applied = False
+    if applied:
+        return  # update scheduled a relaunch; don't open this (old) instance's browser
+
     (open_browser_fn or open_browser)(port)
 
     if run:
