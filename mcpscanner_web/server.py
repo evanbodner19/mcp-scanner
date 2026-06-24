@@ -17,6 +17,7 @@ from mcpscanner_gui.controllers import (
 )
 from mcpscanner_gui.models import ScanType
 from mcpscanner_web import jobs as jobs_mod
+from mcpscanner_web import updater as updater_mod
 from mcpscanner_web.keys import assemble_keys
 from mcpscanner_web.schemas import ScanRequestIn
 from mcpscanner_web.serialization import outcome_to_dict
@@ -84,6 +85,10 @@ def create_app(
     app.state.server = None  # set by the launcher for graceful shutdown
     app.state.jobs = jobs_mod.JobRegistry()
     app.state.background_tasks = set()
+    app.state.release_fetcher = lambda slug: updater_mod.fetch_latest_release(slug)
+    app.state.install_mode_detector = updater_mod.detect_install_mode
+    app.state.frozen_applier = lambda release: updater_mod.apply_frozen_update(release)
+    app.state.pip_applier = lambda slug, tag: updater_mod.apply_pip_update(slug, tag)
 
     @app.get("/api/healthz")
     async def healthz():
@@ -181,6 +186,44 @@ def create_app(
         return StreamingResponse(
             jobs_mod.event_stream(job), media_type="text/event-stream"
         )
+
+    @app.get("/api/version")
+    async def version_info():
+        current = app.state.version
+        release = app.state.release_fetcher(app.state.repo_slug)
+        skipped_version = app.state.store.get_pref("skipped_version")
+        if release is None:
+            return {
+                "current": current, "latest": None, "update_available": False,
+                "install_mode": app.state.install_mode_detector(),
+                "release_notes": "", "skipped": False,
+            }
+        available = updater_mod.is_update_available(current, release.version, skipped_version)
+        return {
+            "current": current,
+            "latest": release.version,
+            "update_available": available,
+            "install_mode": app.state.install_mode_detector(),
+            "release_notes": release.notes,
+            "skipped": bool(skipped_version and skipped_version == release.version),
+        }
+
+    @app.post("/api/update")
+    async def do_update():
+        release = app.state.release_fetcher(app.state.repo_slug)
+        if release is None:
+            return {"status": "unavailable"}
+        mode = app.state.install_mode_detector()
+        try:
+            if mode == "git":
+                return {"status": "git", "message": "Update via git pull (development checkout)."}
+            if mode == "frozen":
+                app.state.frozen_applier(release)
+                return {"status": "started", "message": "Updating and relaunching…"}
+            app.state.pip_applier(app.state.repo_slug, release.tag)
+            return {"status": "started", "message": "Upgraded via package manager. Restart to apply."}
+        except Exception as exc:  # noqa: BLE001 - surfaced to UI, never 500
+            return {"status": "error", "error": str(exc)}
 
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
