@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import threading
 import time
 import webbrowser
@@ -102,6 +104,13 @@ def open_browser(port: int, opener=webbrowser.open) -> None:
 
 
 def main(open_browser_fn=None, run: bool = True) -> None:
+    # PyInstaller windowed builds set sys.stdout/stderr to None (no console).
+    # Uvicorn's DefaultFormatter calls stream.isatty() on init and crashes.
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
+
     app = create_app()
     server = build_server(app, port=0)
 
