@@ -77,16 +77,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - name: Flatten artifacts
-        run: |
-          mkdir -p release
-          find artifacts -name '*.zip' -exec mv {} release/ \;
-          ls -l release
+          merge-multiple: true
 
       - name: Generate checksums.txt
         run: |
-          cd release
+          cd artifacts
           sha256sum MCP-Scanner-*.zip > checksums.txt
           cat checksums.txt
 
@@ -111,5 +106,5 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
-            release/MCP-Scanner-*.zip
-            release/checksums.txt
+            artifacts/MCP-Scanner-*.zip
+            artifacts/checksums.txt
